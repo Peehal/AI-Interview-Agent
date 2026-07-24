@@ -38,6 +38,18 @@ const interviewSchema = new mongoose.Schema({
     candidateProfile:{
      type:String
     },
+    projects:{
+      type:[String],
+      default:[]
+    },
+    skills:{
+      type:[String],
+      default:[]
+    },
+    achievements:{
+      type:[String],
+      default:[]
+    },
     questions:[questionsSchema],
 
     totalQuestions:{

@@ -26,7 +26,7 @@ function InterviewHistory() {
 
 
     return (
-        <div className='min-h-screen bg-linear-to-br from-gray-50 to-emerald-50 py-10' >
+        <div className='min-h-screen bg-linear-to-br from-gray-50 to-indigo-50 py-10' >
             <div className='w-[90vw] lg:w-[70vw] max-w-[90%] mx-auto'>
 
                 <div className='mb-10 w-full flex items-start gap-4 flex-wrap'>
@@ -80,7 +80,7 @@ function InterviewHistory() {
 
                                         {/* SCORE */}
                                         <div className="text-right">
-                                            <p className="text-xl font-bold text-emerald-600">
+                                            <p className="text-xl font-bold text-indigo-600">
                                                 {item.finalScore || 0}/10
                                             </p>
                                             <p className="text-xs text-gray-400">
@@ -91,7 +91,7 @@ function InterviewHistory() {
                                         {/* STATUS BADGE */}
                                         <span
                                             className={`px-4 py-1 rounded-full text-xs font-medium ${item.status === "completed"
-                                                    ? "bg-emerald-100 text-emerald-700"
+                                                    ? "bg-indigo-100 text-indigo-700"
                                                     : "bg-yellow-100 text-yellow-700"
                                                 }`}
                                         >

@@ -22,15 +22,18 @@ function Step1SetUp({ onStart }) {
     const [loading, setLoading] = useState(false);
     const [projects, setProjects] = useState([]);
     const [skills, setSkills] = useState([]);
+    const [achievements, setAchievements] = useState([]);
     const [resumeText, setResumeText] = useState("");
     const [candidateProfile, setCandidateProfile] = useState("");
     const [analysisDone, setAnalysisDone] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
+    const [error, setError] = useState("");
 
 
     const handleUploadResume = async () => {
         if (!resumeFile || analyzing) return;
         setAnalyzing(true)
+        setError("")
 
         const formdata = new FormData()
         formdata.append("resume", resumeFile)
@@ -44,6 +47,7 @@ function Step1SetUp({ onStart }) {
             setExperience(result.data.experience || "");
             setProjects(result.data.projects || []);
             setSkills(result.data.skills || []);
+            setAchievements(result.data.achievements || []);
             setResumeText(result.data.resumeText || "");
             setCandidateProfile(result.data.candidateProfile || "");
             setAnalysisDone(true);
@@ -52,14 +56,16 @@ function Step1SetUp({ onStart }) {
 
         } catch (error) {
             console.log(error)
+            setError(error.response?.data?.message || "Failed to analyze resume. Please try again.");
             setAnalyzing(false);
         }
     }
 
     const handleStart = async () => {
         setLoading(true)
+        setError("")
         try {
-           const result = await axios.post(ServerUrl + "/api/interview/generate-questions" , {role, experience, mode , resumeText, projects, skills, candidateProfile } , {withCredentials:true})
+           const result = await axios.post(ServerUrl + "/api/interview/generate-questions" , {role, experience, mode , resumeText, projects, skills, achievements, candidateProfile } , {withCredentials:true})
            console.log(result.data)
            if(userData){
             dispatch(setUserData({...userData , credits:result.data.creditsLeft}))
@@ -69,6 +75,7 @@ function Step1SetUp({ onStart }) {
 
         } catch (error) {
             console.log(error)
+            setError(error.response?.data?.message || "Failed to start interview. Please try again.");
             setLoading(false)
         }
     }
@@ -85,7 +92,7 @@ function Step1SetUp({ onStart }) {
                     initial={{ x: -80, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
                     transition={{ duration: 0.7 }}
-                    className='relative bg-gradient-to-br from-green-50 to-green-100 p-12 flex flex-col justify-center'>
+                    className='relative bg-gradient-to-br from-indigo-50 to-indigo-100 p-12 flex flex-col justify-center'>
 
                     <h2 className="text-4xl font-bold text-gray-800 mb-6">
                         Start Your AI Interview
@@ -101,15 +108,15 @@ function Step1SetUp({ onStart }) {
                         {
                             [
                                 {
-                                    icon: <FaUserTie className="text-green-600 text-xl" />,
+                                    icon: <FaUserTie className="text-indigo-600 text-xl" />,
                                     text: "Choose Role & Experience",
                                 },
                                 {
-                                    icon: <FaMicrophoneAlt className="text-green-600 text-xl" />,
+                                    icon: <FaMicrophoneAlt className="text-indigo-600 text-xl" />,
                                     text: "Smart Voice Interview",
                                 },
                                 {
-                                    icon: <FaChartLine className="text-green-600 text-xl" />,
+                                    icon: <FaChartLine className="text-indigo-600 text-xl" />,
                                     text: "Performance Analytics",
                                 },
                             ].map((item, index) => (
@@ -150,7 +157,7 @@ function Step1SetUp({ onStart }) {
                             <FaUserTie className='absolute top-4 left-4 text-gray-400' />
 
                             <input type='text' placeholder='Enter role'
-                                className='w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition'
+                                className='w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition'
                                 onChange={(e) => setRole(e.target.value)} value={role} />
                         </div>
 
@@ -159,7 +166,7 @@ function Step1SetUp({ onStart }) {
                             <FaBriefcase className='absolute top-4 left-4 text-gray-400' />
 
                             <input type='text' placeholder='Experience (e.g. 2 years)'
-                                className='w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition'
+                                className='w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition'
                                 onChange={(e) => setExperience(e.target.value)} value={experience} />
 
 
@@ -168,7 +175,7 @@ function Step1SetUp({ onStart }) {
 
                         <select value={mode}
                             onChange={(e) => setMode(e.target.value)}
-                            className='w-full py-3 px-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition'>
+                            className='w-full py-3 px-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition'>
 
                             <option value="Technical">Technical Interview</option>
                             <option value="HR">HR Interview</option>
@@ -179,9 +186,9 @@ function Step1SetUp({ onStart }) {
                             <motion.div
                                 whileHover={{ scale: 1.02 }}
                                 onClick={() => document.getElementById("resumeUpload").click()}
-                                className='border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-green-500 hover:bg-green-50 transition'>
+                                className='border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 transition'>
 
-                                <FaFileUpload className='text-4xl mx-auto text-green-600 mb-3' />
+                                <FaFileUpload className='text-4xl mx-auto text-indigo-600 mb-3' />
 
                                 <input type="file"
                                     accept="application/pdf"
@@ -241,9 +248,22 @@ function Step1SetUp({ onStart }) {
 
                                         <div className='flex flex-wrap gap-2'>
                                             {skills.map((s, i) => (
-                                                <span key={i} className='bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm'>{s}</span>
+                                                <span key={i} className='bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm'>{s}</span>
                                             ))}
                                         </div>
+                                    </div>
+                                )}
+
+                                {achievements.length > 0 && (
+                                    <div>
+                                        <p className='font-medium text-gray-700 mb-1'>
+                                            Achievements:</p>
+
+                                        <ul className='list-disc list-inside text-gray-600 space-y-1'>
+                                            {achievements.map((a, i) => (
+                                                <li key={i}>{a}</li>
+                                            ))}
+                                        </ul>
                                     </div>
                                 )}
 
@@ -251,12 +271,18 @@ function Step1SetUp({ onStart }) {
                         )}
 
 
+                        {error && (
+                            <p className='text-red-600 text-sm font-medium text-center'>
+                                {error}
+                            </p>
+                        )}
+
                         <motion.button
                         onClick={handleStart}
                             disabled={!role || !experience || loading}
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.95 }}
-                            className='w-full disabled:bg-gray-600 bg-green-600 hover:bg-green-700 text-white py-3 rounded-full text-lg font-semibold transition duration-300 shadow-md'>
+                            className='w-full disabled:bg-gray-600 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-full text-lg font-semibold transition duration-300 shadow-md'>
                             {loading ? "Staring...":"Start Interview"}
 
 

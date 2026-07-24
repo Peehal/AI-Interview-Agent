@@ -1,6 +1,6 @@
 import fs from "fs"
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
-import { askAi } from "../services/openRouter.service.js";
+import { askAi, stripJsonFences } from "../services/openRouter.service.js";
 import User from "../models/user.model.js";
 import Interview from "../models/interview.model.js";
 
@@ -49,8 +49,14 @@ Return strictly JSON:
   "experience": "string",
   "projects": ["project1", "project2"],
   "skills": ["skill1", "skill2"],
+  "achievements": ["achievement1", "achievement2"],
   "candidateProfile": "string"
 }
+
+Rules for extraction:
+- List EVERY project mentioned in the resume, not just the first or most prominent one.
+- List EVERY skill/technology mentioned, not just headline ones.
+- achievements should capture certifications, awards, competitive rankings, notable metrics/impact (e.g. "reduced latency by 40%"), or any other accomplishments called out in the resume. Use an empty array if none are present.
 
 Rules for candidateProfile:
 - 3 to 5 sentences, written like an interviewer's private notes before the interview.
@@ -68,7 +74,7 @@ Rules for candidateProfile:
 
     const aiResponse = await askAi(messages)
 
-    const parsed = JSON.parse(aiResponse);
+    const parsed = JSON.parse(stripJsonFences(aiResponse));
 
     fs.unlinkSync(filepath)
 
@@ -78,6 +84,7 @@ Rules for candidateProfile:
       experience: parsed.experience,
       projects: parsed.projects,
       skills: parsed.skills,
+      achievements: parsed.achievements || [],
       candidateProfile: parsed.candidateProfile,
       resumeText
     });
@@ -96,7 +103,7 @@ Rules for candidateProfile:
 
 export const generateQuestion = async (req, res) => {
   try {
-    let { role, experience, mode, resumeText, projects, skills, candidateProfile } = req.body
+    let { role, experience, mode, resumeText, projects, skills, achievements, candidateProfile } = req.body
 
     role = role?.trim();
     experience = experience?.trim();
@@ -128,6 +135,10 @@ export const generateQuestion = async (req, res) => {
       ? skills.join(", ")
       : "None";
 
+    const achievementsText = Array.isArray(achievements) && achievements.length
+      ? achievements.join(", ")
+      : "None";
+
     const safeResume = resumeText?.trim() || "None";
     const safeCandidateProfile = candidateProfile?.trim() || "None";
 
@@ -136,7 +147,8 @@ export const generateQuestion = async (req, res) => {
     Experience:${experience}
     InterviewMode:${mode}
     Projects:${projectText}
-    Skills:${skillsText},
+    Skills:${skillsText}
+    Achievements:${achievementsText}
     Resume:${safeResume}
     InterviewerNotesOnCandidate:${safeCandidateProfile}
     `;
@@ -166,9 +178,12 @@ Strict Rules:
 - Do NOT add extra text before or after.
 - Output only the question, nothing else.
 - Keep language simple and conversational.
-- The question must feel practical and realistic.
+- The question must be technical, not generic. Name a specific skill, technology, tool, project, or achievement from the candidate's resume and ask something concrete about it (how they built it, why they chose a specific approach, a tradeoff, an implementation detail, or how a specific concept/technology works).
+- Do NOT ask generic behavioral questions like "tell me about a challenge you faced" or "describe your experience" unless InterviewMode explicitly calls for a behavioral/HR round.
+- Avoid vague wording like "a project" or "your skills" — reference the actual named technology or project from the resume.
+- The candidate's resume may list multiple projects, skills, and achievements. Do NOT default to only the first project listed — pick whichever single project, skill, or achievement is most worth opening with based on the interviewer's notes and role fit.
 
-Use the interviewer's notes on the candidate to decide what's worth opening with, and base the question on the candidate's role, experience, interviewMode, projects, skills, and resume details.
+Use the interviewer's notes on the candidate to decide what's worth opening with, and base the question on the candidate's role, experience, interviewMode, projects, skills, achievements, and resume details.
 `
       }
       ,
@@ -208,6 +223,9 @@ Use the interviewer's notes on the candidate to decide what's worth opening with
       mode,
       resumeText: safeResume,
       candidateProfile: safeCandidateProfile,
+      projects: Array.isArray(projects) ? projects : [],
+      skills: Array.isArray(skills) ? skills : [],
+      achievements: Array.isArray(achievements) ? achievements : [],
       totalQuestions: TOTAL_QUESTIONS,
       questions: [{
         question,
@@ -249,10 +267,17 @@ export const getNextQuestion = async (req, res) => {
       .map((q, i) => `Q${i + 1} (${q.difficulty}): ${q.question}\nCandidate's answer: ${q.answer || "No answer given"}\nScore given: ${q.score ?? "N/A"}/10 — Feedback: ${q.feedback || "N/A"}`)
       .join("\n\n");
 
+    const projectText = interview.projects?.length ? interview.projects.join(", ") : "None";
+    const skillsText = interview.skills?.length ? interview.skills.join(", ") : "None";
+    const achievementsText = interview.achievements?.length ? interview.achievements.join(", ") : "None";
+
     const userPrompt = `
 Role: ${interview.role}
 Experience: ${interview.experience}
 InterviewMode: ${interview.mode}
+Projects: ${projectText}
+Skills: ${skillsText}
+Achievements: ${achievementsText}
 InterviewerNotesOnCandidate: ${interview.candidateProfile || "None"}
 
 Conversation so far:
@@ -282,10 +307,15 @@ Strict Rules:
 - The question must feel practical and realistic.
 - Do NOT repeat or rephrase a question already asked in the conversation so far.
 - Match the requested difficulty level for this question.
+- The question must be technical, not generic. Name a specific skill, technology, tool, project, or achievement from the candidate's resume and ask something concrete about it (how they built it, why they chose a specific approach, a tradeoff, an implementation detail, an edge case, or how a specific concept/technology works).
+- Do NOT ask generic behavioral questions like "tell me about a challenge you faced" or "describe your experience" unless InterviewMode explicitly calls for a behavioral/HR round.
+- Avoid vague wording like "a project" or "your skills" — reference the actual named technology or project from the resume or from the conversation so far.
+- The candidate's resume lists multiple Projects, Skills, and Achievements above. Look at which ones have ALREADY been asked about in "Conversation so far" and prefer covering a DIFFERENT project, skill, or achievement that hasn't been touched on yet, so the interview spans the candidate's full background instead of repeatedly drilling into the same one project.
+- Only revisit an already-covered project/skill if you are deliberately probing deeper on a weak/vague previous answer (see adaptation rule below).
 
 Adapt using the conversation so far:
 - If a previous answer was weak or vague, you may probe deeper on that same topic instead of moving on.
-- If a previous answer was strong, move to a new area rather than re-testing it.
+- If a previous answer was strong, move to a new area — a different project, skill, or achievement — rather than re-testing it.
 - Stay consistent with the interviewer's notes on the candidate.
 `
       },
@@ -418,7 +448,7 @@ Answer: ${answer}
     const aiResponse = await askAi(messages)
 
 
-    const parsed = JSON.parse(aiResponse);
+    const parsed = JSON.parse(stripJsonFences(aiResponse));
 
     question.answer = answer;
     question.confidence = parsed.confidence;

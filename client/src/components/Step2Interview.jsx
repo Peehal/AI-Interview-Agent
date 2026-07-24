@@ -17,9 +17,12 @@ function Step2Interview({ interviewData, onFinish }) {
   const [questions, setQuestions] = useState(interviewData.questions);
   const [isIntroPhase, setIsIntroPhase] = useState(true);
 
-  const [isMicOn, setIsMicOn] = useState(true);
+  const [isMicOn, setIsMicOn] = useState(false);
   const recognitionRef = useRef(null);
   const [isAIPlaying, setIsAIPlaying] = useState(false);
+  const isMicOnRef = useRef(isMicOn);
+  const isAIPlayingRef = useRef(isAIPlaying);
+  const [micSupported, setMicSupported] = useState(true);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answer, setAnswer] = useState("");
@@ -206,9 +209,23 @@ function Step2Interview({ interviewData, onFinish }) {
 
 
   useEffect(() => {
-    if (!("webkitSpeechRecognition" in window)) return;
+    isMicOnRef.current = isMicOn;
+  }, [isMicOn]);
 
-    const recognition = new window.webkitSpeechRecognition();
+  useEffect(() => {
+    isAIPlayingRef.current = isAIPlaying;
+  }, [isAIPlaying]);
+
+  useEffect(() => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn("Speech recognition is not supported in this browser. Use Chrome or Edge.");
+      setMicSupported(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     recognition.continuous = true;
     recognition.interimResults = false;
@@ -217,28 +234,64 @@ function Step2Interview({ interviewData, onFinish }) {
       const transcript =
         event.results[event.results.length - 1][0].transcript;
 
-      setAnswer((prev) => prev + " " + transcript);
+      setAnswer((prev) => (prev ? prev + " " + transcript : transcript));
+    };
+
+    recognition.onerror = (event) => {
+      console.warn("Speech recognition error:", event.error);
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setMicSupported(false);
+        setIsMicOn(false);
+      }
+    };
+
+    // The browser auto-stops recognition after silence or on error.
+    // Restart it if the mic is still supposed to be on and AI isn't speaking.
+    recognition.onend = () => {
+      if (isMicOnRef.current && !isAIPlayingRef.current) {
+        try {
+          recognition.start();
+        } catch { }
+      }
     };
 
     recognitionRef.current = recognition;
+
+    return () => {
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.onresult = null;
+      recognition.stop();
+      recognition.abort();
+    };
 
   }, []);
 
 
   const startMic = () => {
-    if (recognitionRef.current && !isAIPlaying) {
+    if (recognitionRef.current && !isAIPlayingRef.current) {
       try {
         recognitionRef.current.start();
-      } catch { }
+      } catch (err) {
+        console.warn("Could not start mic:", err.message);
+      }
     }
   };
 
   const stopMic = () => {
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch (err) {
+        console.warn("Could not stop mic:", err.message);
+      }
     }
   };
   const toggleMic = () => {
+    if (!micSupported) {
+      alert("Voice input isn't supported or was blocked in this browser. Please use Chrome or Edge and allow microphone access.");
+      return;
+    }
     if (isMicOn) {
       stopMic();
     } else {
@@ -343,7 +396,7 @@ setIsSubmitting(false)
 
 
   return (
-    <div className='min-h-screen bg-linear-to-br from-emerald-50 via-white to-teal-100 flex items-center justify-center p-4 sm:p-6'>
+    <div className='min-h-screen bg-linear-to-br from-indigo-50 via-white to-violet-100 flex items-center justify-center p-4 sm:p-6'>
       <div className='w-full max-w-350 min-h-[80vh] bg-white rounded-3xl shadow-2xl border border-gray-200 flex flex-col lg:flex-row overflow-hidden'>
 
         {/* video section */}
@@ -374,7 +427,7 @@ setIsSubmitting(false)
               <span className='text-sm text-gray-500'>
                 Interview Status
               </span>
-              {isAIPlaying && <span className='text-sm font-semibold text-emerald-600'>
+              {isAIPlaying && <span className='text-sm font-semibold text-indigo-600'>
                 {isAIPlaying ? "AI Speaking" : ""}
               </span>}
             </div>
@@ -390,12 +443,12 @@ setIsSubmitting(false)
 
             <div className='grid grid-cols-2 gap-6 text-center'>
               <div>
-                <span className='text-2xl font-bold text-emerald-600'>{currentIndex + 1}</span>
+                <span className='text-2xl font-bold text-indigo-600'>{currentIndex + 1}</span>
                 <span className='text-xs text-gray-400'>Current Questions</span>
               </div>
 
               <div>
-                <span className='text-2xl font-bold text-emerald-600'>{totalQuestions}</span>
+                <span className='text-2xl font-bold text-indigo-600'>{totalQuestions}</span>
                 <span className='text-xs text-gray-400'>Total Questions</span>
               </div>
             </div>
@@ -407,7 +460,7 @@ setIsSubmitting(false)
         {/* Text section */}
 
         <div className='flex-1 flex flex-col p-4 sm:p-6 md:p-8 relative'>
-          <h2 className='text-xl sm:text-2xl font-bold text-emerald-600 mb-6'>
+          <h2 className='text-xl sm:text-2xl font-bold text-indigo-600 mb-6'>
             AI Smart Interview
           </h2>
 
@@ -424,7 +477,7 @@ setIsSubmitting(false)
             placeholder="Type your answer here..."
             onChange={(e) => setAnswer(e.target.value)}
             value={answer}
-            className="flex-1 bg-gray-100 p-4 sm:p-6 rounded-2xl resize-none outline-none border border-gray-200 focus:ring-2 focus:ring-emerald-500 transition text-gray-800" />
+            className="flex-1 bg-gray-100 p-4 sm:p-6 rounded-2xl resize-none outline-none border border-gray-200 focus:ring-2 focus:ring-indigo-500 transition text-gray-800" />
 
 
          {!feedback ? ( <div className='flex items-center gap-4 mt-6'>
@@ -439,7 +492,7 @@ setIsSubmitting(false)
             onClick={submitAnswer}
             disabled={isSubmitting}
               whileTap={{ scale: 0.95 }}
-              className='flex-1 bg-gradient-to-r from-emerald-600 to-teal-500 text-white py-3 sm:py-4 rounded-2xl shadow-lg hover:opacity-90 transition font-semibold disabled:bg-gray-500'>
+              className='flex-1 bg-gradient-to-r from-indigo-600 to-violet-500 text-white py-3 sm:py-4 rounded-2xl shadow-lg hover:opacity-90 transition font-semibold disabled:bg-gray-500'>
               {isSubmitting?"Submitting...":"Submit Answer"}
 
             </motion.button>
@@ -448,14 +501,14 @@ setIsSubmitting(false)
             <motion.div 
              initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-            className='mt-6 bg-emerald-50 border border-emerald-200 p-5 rounded-2xl shadow-sm'>
-              <p className='text-emerald-700 font-medium mb-4'>{feedback}</p>
+            className='mt-6 bg-indigo-50 border border-indigo-200 p-5 rounded-2xl shadow-sm'>
+              <p className='text-indigo-700 font-medium mb-4'>{feedback}</p>
 
               <button
               onClick={handleNext}
               disabled={isLoadingNext}
 
-               className='w-full bg-gradient-to-r from-emerald-600 to-teal-500 text-white py-3 rounded-xl shadow-md hover:opacity-90 transition flex items-center justify-center gap-1 disabled:opacity-60'>
+               className='w-full bg-gradient-to-r from-indigo-600 to-violet-500 text-white py-3 rounded-xl shadow-md hover:opacity-90 transition flex items-center justify-center gap-1 disabled:opacity-60'>
                 {isLoadingNext ? "Preparing next question..." : (<>Next Question <BsArrowRight size={18}/></>)}
               </button>
 
