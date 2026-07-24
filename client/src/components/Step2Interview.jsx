@@ -12,7 +12,9 @@ import { ServerUrl } from '../App'
 import { BsArrowRight } from 'react-icons/bs'
 
 function Step2Interview({ interviewData, onFinish }) {
-  const { interviewId, questions, userName } = interviewData;
+  const { interviewId, userName } = interviewData;
+  const totalQuestions = interviewData.totalQuestions || interviewData.questions.length;
+  const [questions, setQuestions] = useState(interviewData.questions);
   const [isIntroPhase, setIsIntroPhase] = useState(true);
 
   const [isMicOn, setIsMicOn] = useState(true);
@@ -27,6 +29,7 @@ function Step2Interview({ interviewData, onFinish }) {
   );
   const [selectedVoice, setSelectedVoice] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingNext, setIsLoadingNext] = useState(false);
   const [voiceGender, setVoiceGender] = useState("female");
   const [subtitle, setSubtitle] = useState("");
 
@@ -156,7 +159,7 @@ function Step2Interview({ interviewData, onFinish }) {
         await new Promise(r => setTimeout(r, 800));
 
         // If last question (hard level)
-        if (currentIndex === questions.length - 1) {
+        if (currentIndex === totalQuestions - 1) {
           await speakText("Alright, this one might be a bit more challenging.");
         }
 
@@ -268,23 +271,35 @@ setIsSubmitting(false)
     }
   }
 
-  const handleNext =async () => {
+  const handleNext = async () => {
     setAnswer("");
     setFeedback("");
 
-    if (currentIndex + 1 >= questions.length) {
+    if (currentIndex + 1 >= totalQuestions) {
       finishInterview();
       return;
     }
 
     await speakText("Alright, let's move to the next question.");
 
-    setCurrentIndex(currentIndex + 1);
+    setIsLoadingNext(true);
+    try {
+      const result = await axios.post(ServerUrl + "/api/interview/next-question", {
+        interviewId,
+      }, { withCredentials: true });
+
+      setQuestions((prev) => [...prev, result.data.question]);
+      setCurrentIndex(currentIndex + 1);
+    } catch (error) {
+      console.log(error);
+    }
+    setIsLoadingNext(false);
+
     setTimeout(() => {
       if (isMicOn) startMic();
     }, 500);
 
-   
+
   }
 
   const finishInterview = async () => {
@@ -380,7 +395,7 @@ setIsSubmitting(false)
               </div>
 
               <div>
-                <span className='text-2xl font-bold text-emerald-600'>{questions.length}</span>
+                <span className='text-2xl font-bold text-emerald-600'>{totalQuestions}</span>
                 <span className='text-xs text-gray-400'>Total Questions</span>
               </div>
             </div>
@@ -399,7 +414,7 @@ setIsSubmitting(false)
 
           {!isIntroPhase && (<div className='relative mb-6 bg-gray-50 p-4 sm:p-6 rounded-2xl border border-gray-200 shadow-sm'>
             <p className='text-xs sm:text-sm text-gray-400 mb-2'>
-              Question {currentIndex + 1} of {questions.length}
+              Question {currentIndex + 1} of {totalQuestions}
             </p>
 
             <div className='text-base sm:text-lg font-semibold text-gray-800 leading-relaxed '>{currentQuestion?.question}</div>
@@ -438,9 +453,10 @@ setIsSubmitting(false)
 
               <button
               onClick={handleNext}
+              disabled={isLoadingNext}
 
-               className='w-full bg-gradient-to-r from-emerald-600 to-teal-500 text-white py-3 rounded-xl shadow-md hover:opacity-90 transition flex items-center justify-center gap-1'>
-                Next Question <BsArrowRight size={18}/>
+               className='w-full bg-gradient-to-r from-emerald-600 to-teal-500 text-white py-3 rounded-xl shadow-md hover:opacity-90 transition flex items-center justify-center gap-1 disabled:opacity-60'>
+                {isLoadingNext ? "Preparing next question..." : (<>Next Question <BsArrowRight size={18}/></>)}
               </button>
 
             </motion.div>
