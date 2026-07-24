@@ -23,6 +23,7 @@ function Step1SetUp({ onStart }) {
     const [projects, setProjects] = useState([]);
     const [skills, setSkills] = useState([]);
     const [resumeText, setResumeText] = useState("");
+    const [candidateProfile, setCandidateProfile] = useState("");
     const [analysisDone, setAnalysisDone] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
 
@@ -44,6 +45,7 @@ function Step1SetUp({ onStart }) {
             setProjects(result.data.projects || []);
             setSkills(result.data.skills || []);
             setResumeText(result.data.resumeText || "");
+            setCandidateProfile(result.data.candidateProfile || "");
             setAnalysisDone(true);
 
             setAnalyzing(false);
@@ -57,7 +59,7 @@ function Step1SetUp({ onStart }) {
     const handleStart = async () => {
         setLoading(true)
         try {
-           const result = await axios.post(ServerUrl + "/api/interview/generate-questions" , {role, experience, mode , resumeText, projects, skills } , {withCredentials:true}) 
+           const result = await axios.post(ServerUrl + "/api/interview/generate-questions" , {role, experience, mode , resumeText, projects, skills, candidateProfile } , {withCredentials:true})
            console.log(result.data)
            if(userData){
             dispatch(setUserData({...userData , credits:result.data.creditsLeft}))

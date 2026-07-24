@@ -36,7 +36,7 @@ export const analyzeResume = async (req, res) => {
       {
         role: "system",
         content: `
-Extract structured data from resume.
+Extract structured data from resume, and form a real understanding of the candidate.
 
 Return strictly JSON:
 
@@ -44,8 +44,15 @@ Return strictly JSON:
   "role": "string",
   "experience": "string",
   "projects": ["project1", "project2"],
-  "skills": ["skill1", "skill2"]
+  "skills": ["skill1", "skill2"],
+  "candidateProfile": "string"
 }
+
+Rules for candidateProfile:
+- 3 to 5 sentences, written like an interviewer's private notes before the interview.
+- Identify the candidate's strongest area and what's worth probing deeper.
+- Call out anything vague, generic, or unverifiable that deserves a follow-up question.
+- Do NOT restate the raw fields (role/skills/projects) — add interpretation, not repetition.
 `
       },
       {
@@ -67,6 +74,7 @@ Return strictly JSON:
       experience: parsed.experience,
       projects: parsed.projects,
       skills: parsed.skills,
+      candidateProfile: parsed.candidateProfile,
       resumeText
     });
 
