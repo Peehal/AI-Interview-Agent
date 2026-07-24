@@ -4,6 +4,10 @@ import { askAi } from "../services/openRouter.service.js";
 import User from "../models/user.model.js";
 import Interview from "../models/interview.model.js";
 
+const DIFFICULTY_PLAN = ["easy", "easy", "medium", "medium", "hard"];
+const TIME_LIMIT_PLAN = [60, 60, 90, 90, 120];
+const TOTAL_QUESTIONS = DIFFICULTY_PLAN.length;
+
 export const analyzeResume = async (req, res) => {
   try {
     if (!req.file) {
@@ -92,7 +96,7 @@ Rules for candidateProfile:
 
 export const generateQuestion = async (req, res) => {
   try {
-    let { role, experience, mode, resumeText, projects, skills } = req.body
+    let { role, experience, mode, resumeText, projects, skills, candidateProfile } = req.body
 
     role = role?.trim();
     experience = experience?.trim();
@@ -125,6 +129,7 @@ export const generateQuestion = async (req, res) => {
       : "None";
 
     const safeResume = resumeText?.trim() || "None";
+    const safeCandidateProfile = candidateProfile?.trim() || "None";
 
     const userPrompt = `
     Role:${role}
@@ -133,6 +138,7 @@ export const generateQuestion = async (req, res) => {
     Projects:${projectText}
     Skills:${skillsText},
     Resume:${safeResume}
+    InterviewerNotesOnCandidate:${safeCandidateProfile}
     `;
 
     if (!userPrompt.trim()) {
@@ -150,26 +156,19 @@ You are a real human interviewer conducting a professional interview.
 
 Speak in simple, natural English as if you are directly talking to the candidate.
 
-Generate exactly 5 interview questions.
+Generate exactly 1 opening interview question, at easy difficulty.
 
 Strict Rules:
-- Each question must contain between 15 and 25 words.
-- Each question must be a single complete sentence.
-- Do NOT number them.
+- The question must contain between 15 and 25 words.
+- The question must be a single complete sentence.
+- Do NOT number it.
 - Do NOT add explanations.
 - Do NOT add extra text before or after.
-- One question per line only.
+- Output only the question, nothing else.
 - Keep language simple and conversational.
-- Questions must feel practical and realistic.
+- The question must feel practical and realistic.
 
-Difficulty progression:
-Question 1 → easy  
-Question 2 → easy  
-Question 3 → medium  
-Question 4 → medium  
-Question 5 → hard  
-
-Make questions based on the candidate’s role, experience,interviewMode, projects, skills, and resume details.
+Use the interviewer's notes on the candidate to decide what's worth opening with, and base the question on the candidate's role, experience, interviewMode, projects, skills, and resume details.
 `
       }
       ,
@@ -183,23 +182,19 @@ Make questions based on the candidate’s role, experience,interviewMode, projec
     const aiResponse = await askAi(messages)
 
     if (!aiResponse || !aiResponse.trim()) {
-           
+
       return res.status(500).json({
         message: "AI returned empty response."
       });
 
     }
 
-    const questionsArray = aiResponse
-      .split("\n")
-      .map(q => q.trim())
-      .filter(q => q.length > 0)
-      .slice(0, 5);
+    const question = aiResponse.trim().split("\n")[0].trim();
 
-    if (questionsArray.length === 0) {
-      
+    if (!question) {
+
       return res.status(500).json({
-        message: "AI failed to generate questions."
+        message: "AI failed to generate a question."
       });
     }
 
@@ -212,21 +207,121 @@ Make questions based on the candidate’s role, experience,interviewMode, projec
       experience,
       mode,
       resumeText: safeResume,
-      questions: questionsArray.map((q, index) => ({
-        question: q,
-        difficulty: ["easy", "easy", "medium", "medium", "hard"][index],
-        timeLimit: [60, 60, 90, 90, 120][index],
-      }))
+      candidateProfile: safeCandidateProfile,
+      totalQuestions: TOTAL_QUESTIONS,
+      questions: [{
+        question,
+        difficulty: DIFFICULTY_PLAN[0],
+        timeLimit: TIME_LIMIT_PLAN[0],
+      }]
     })
 
     res.json({
       interviewId: interview._id,
       creditsLeft: user.credits,
       userName: user.name,
+      totalQuestions: interview.totalQuestions,
       questions: interview.questions
     });
   } catch (error) {
     return res.status(500).json({message:`failed to create interview ${error}`})
+  }
+}
+
+
+export const getNextQuestion = async (req, res) => {
+  try {
+    const { interviewId } = req.body
+
+    const interview = await Interview.findById(interviewId)
+
+    if (!interview) {
+      return res.status(404).json({ message: "Interview not found." });
+    }
+
+    const nextIndex = interview.questions.length;
+
+    if (nextIndex >= interview.totalQuestions) {
+      return res.status(400).json({ message: "No more questions for this interview." });
+    }
+
+    const historyText = interview.questions
+      .map((q, i) => `Q${i + 1} (${q.difficulty}): ${q.question}\nCandidate's answer: ${q.answer || "No answer given"}\nScore given: ${q.score ?? "N/A"}/10 — Feedback: ${q.feedback || "N/A"}`)
+      .join("\n\n");
+
+    const userPrompt = `
+Role: ${interview.role}
+Experience: ${interview.experience}
+InterviewMode: ${interview.mode}
+InterviewerNotesOnCandidate: ${interview.candidateProfile || "None"}
+
+Conversation so far:
+${historyText}
+
+Generate question ${nextIndex + 1} of ${interview.totalQuestions}, at ${DIFFICULTY_PLAN[nextIndex]} difficulty.
+`;
+
+    const messages = [
+      {
+        role: "system",
+        content: `
+You are a real human interviewer conducting a professional interview, continuing a conversation that is already in progress.
+
+Speak in simple, natural English as if you are directly talking to the candidate.
+
+Generate exactly 1 next interview question, reacting to how the candidate has answered so far.
+
+Strict Rules:
+- The question must contain between 15 and 25 words.
+- The question must be a single complete sentence.
+- Do NOT number it.
+- Do NOT add explanations.
+- Do NOT add extra text before or after.
+- Output only the question, nothing else.
+- Keep language simple and conversational.
+- The question must feel practical and realistic.
+- Do NOT repeat or rephrase a question already asked in the conversation so far.
+- Match the requested difficulty level for this question.
+
+Adapt using the conversation so far:
+- If a previous answer was weak or vague, you may probe deeper on that same topic instead of moving on.
+- If a previous answer was strong, move to a new area rather than re-testing it.
+- Stay consistent with the interviewer's notes on the candidate.
+`
+      },
+      {
+        role: "user",
+        content: userPrompt
+      }
+    ];
+
+    const aiResponse = await askAi(messages)
+
+    if (!aiResponse || !aiResponse.trim()) {
+      return res.status(500).json({ message: "AI returned empty response." });
+    }
+
+    const question = aiResponse.trim().split("\n")[0].trim();
+
+    if (!question) {
+      return res.status(500).json({ message: "AI failed to generate a question." });
+    }
+
+    const newQuestion = {
+      question,
+      difficulty: DIFFICULTY_PLAN[nextIndex],
+      timeLimit: TIME_LIMIT_PLAN[nextIndex],
+    };
+
+    interview.questions.push(newQuestion);
+    await interview.save();
+
+    res.json({
+      questionIndex: nextIndex,
+      question: interview.questions[nextIndex]
+    });
+  } catch (error) {
+    return res.status(500).json({ message: `failed to generate next question ${error}` })
   }
 }
 
