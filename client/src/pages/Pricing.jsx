@@ -108,7 +108,7 @@ function Pricing() {
 
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-gray-50 to-indigo-50 py-16 px-6'>
+    <div className='min-h-screen bg-linear-to-br from-gray-50 to-indigo-50 py-16 px-6'>
 
       <div className='max-w-6xl mx-auto mb-14 flex items-start gap-4'>
 
